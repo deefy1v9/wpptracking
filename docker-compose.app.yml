@@ -20,7 +20,7 @@ services:
       - PORT=3001
       - DATABASE_URL=postgresql://rastreamento:${DB_PASSWORD}@db:5432/rastreamentowpp
       - JWT_SECRET=${JWT_SECRET}
-      - FRONTEND_URL=${FRONTEND_URL:-http://103.199.184.64}
+      - FRONTEND_URL=${FRONTEND_URL:-https://bulhoes.metrixbr.com}
     networks:
       - traefik-public
       - internal
@@ -46,7 +46,7 @@ services:
       labels:
         - traefik.enable=true
         # ── HTTPS com domínio + SSL automático (Let's Encrypt) ───────────────
-        - traefik.http.routers.rastreamentowpp.rule=Host(`bulhoes.metrix.com`)
+        - traefik.http.routers.rastreamentowpp.rule=Host(`bulhoes.metrixbr.com`)
         - traefik.http.routers.rastreamentowpp.entrypoints=websecure
         - traefik.http.routers.rastreamentowpp.tls.certresolver=letsencrypt
         - traefik.http.services.rastreamentowpp.loadbalancer.server.port=3001
