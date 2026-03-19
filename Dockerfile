@@ -1,18 +1,14 @@
-# ─── Stage 1: Install all dependencies ───────────────────────────────────────
-FROM node:22-alpine AS deps
+# ─── Stage 1: Build frontend + backend ───────────────────────────────────────
+FROM node:22-alpine AS builder
 WORKDIR /app
 
+# Install ALL dependencies (including workspace-specific node_modules)
 COPY package.json package-lock.json ./
 COPY frontend/package.json ./frontend/
 COPY backend/package.json ./backend/
 RUN npm ci
 
-# ─── Stage 2: Build frontend + backend ────────────────────────────────────────
-FROM node:22-alpine AS builder
-WORKDIR /app
-
-# Copy deps
-COPY --from=deps /app/node_modules ./node_modules
+# Copy source code
 COPY . .
 
 # Build Vite frontend
@@ -21,13 +17,13 @@ RUN npm run build --workspace=frontend
 # Build Express backend (TypeScript → JavaScript)
 RUN npm run build --workspace=backend
 
-# ─── Stage 3: Production image ────────────────────────────────────────────────
+# ─── Stage 2: Production image ────────────────────────────────────────────────
 FROM node:22-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Install only production deps (no devDeps)
+# Install only production deps
 COPY package.json package-lock.json ./
 COPY frontend/package.json ./frontend/
 COPY backend/package.json ./backend/
