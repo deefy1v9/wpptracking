@@ -48,7 +48,7 @@ services:
         # ── HTTPS com domínio + SSL automático (Let's Encrypt) ───────────────
         - traefik.http.routers.rastreamentowpp.rule=Host(`bulhoes.metrixbr.com`)
         - traefik.http.routers.rastreamentowpp.entrypoints=websecure
-        - traefik.http.routers.rastreamentowpp.tls.certresolver=letsencrypt
+        - traefik.http.routers.rastreamentowpp.tls.certresolver=mytlschallenge
         - traefik.http.services.rastreamentowpp.loadbalancer.server.port=3001
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3001/health || exit 1"]
