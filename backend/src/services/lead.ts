@@ -1,0 +1,181 @@
+import { db } from '../db/index';
+import { leads, messages, webhook_logs } from '../db/schema';
+import type { Lead, LeadStatus, NewLead } from '../db/schema';
+import { eq, and } from 'drizzle-orm';
+import type { ParsedMessage } from '../types/parsed-message';
+import { normalizePhone } from './hash';
+import { fetchAdData } from './meta-graph';
+import { sendLeadSubmitted, sendQualifiedLead } from './meta-capi';
+import { getSettings } from './settings-cache';
+
+async function logWebhook(
+  tenantId: number,
+  source: 'whatsapp_cloud' | 'evolution' | 'cloudia',
+  payload: unknown,
+  processed: boolean,
+  error: string | null
+): Promise<void> {
+  try {
+    await db.insert(webhook_logs).values({
+      tenant_id: tenantId,
+      source,
+      payload: payload as Record<string, unknown>,
+      processed,
+      error,
+    });
+  } catch (err) {
+    console.error('[lead] logWebhook error:', err);
+  }
+}
+
+async function storeMessage(leadId: number, parsed: ParsedMessage): Promise<void> {
+  await db.insert(messages).values({
+    lead_id: leadId,
+    direcao: parsed.direction,
+    conteudo: parsed.content,
+    tipo: parsed.tipo,
+    message_id_whatsapp: parsed.messageId,
+    timestamp_whatsapp: parsed.timestamp ? new Date(parsed.timestamp) : new Date(),
+    veio_de_anuncio: parsed.veioDeAnuncio,
+  });
+}
+
+export async function processIncomingMessage(parsed: ParsedMessage, tenantId: number): Promise<void> {
+  // 1. Log webhook
+  await logWebhook(tenantId, parsed.source, parsed.rawPayload, false, null);
+
+  try {
+    const phone = normalizePhone(parsed.phone);
+    const cfg = await getSettings(tenantId);
+
+    // 2. Find or create lead
+    let existing = await db.query.leads.findFirst({
+      where: and(eq(leads.telefone, phone), eq(leads.tenant_id, tenantId)),
+    });
+
+    let isNew = false;
+
+    if (!existing) {
+      // Only create leads that came from an ad (have ctwaclid)
+      if (!parsed.veioDeAnuncio || !parsed.ctwaclid) {
+        await logWebhook(tenantId, parsed.source, parsed.rawPayload, false, 'Ignorado: lead orgânico sem ctwaclid');
+        return;
+      }
+
+      // New lead
+      isNew = true;
+      const newLead: NewLead = {
+        tenant_id: tenantId,
+        nome: parsed.name,
+        telefone: phone,
+        mensagem_inicial: parsed.content,
+        link_whatsapp: `https://wa.me/${phone}`,
+        origem: parsed.veioDeAnuncio ? 'anuncio' : 'organico',
+        status: 'novo',
+        data_entrada: new Date(),
+        ctwaclid: parsed.ctwaclid,
+        source_id: parsed.sourceId,
+        titulo_anuncio: parsed.tituloAnuncio,
+        tipo_midia: parsed.tipoMidia,
+        thumbnail_url: parsed.thumbnailUrl,
+        url_anuncio: parsed.sourceUrl,
+      };
+
+      const [inserted] = await db.insert(leads).values(newLead).returning();
+      existing = inserted;
+    } else {
+      // Existing lead — check attribution model
+      const model = cfg?.attribution_model ?? 'ultimo_clique';
+      if (model === 'ultimo_clique' && parsed.veioDeAnuncio) {
+        await db
+          .update(leads)
+          .set({
+            ctwaclid: parsed.ctwaclid,
+            source_id: parsed.sourceId,
+            titulo_anuncio: parsed.tituloAnuncio,
+            tipo_midia: parsed.tipoMidia,
+            thumbnail_url: parsed.thumbnailUrl,
+            url_anuncio: parsed.sourceUrl,
+            origem: 'anuncio',
+            updated_at: new Date(),
+          })
+          .where(eq(leads.id, existing.id));
+        existing = (await db.query.leads.findFirst({ where: eq(leads.id, existing.id) })) ?? existing;
+      }
+    }
+
+    // 3. Store message
+    await storeMessage(existing.id, parsed);
+
+    // 4. Fetch ad data from Graph API if new lead with ad data
+    if (isNew && parsed.sourceId && cfg?.meta_access_token) {
+      const adData = await fetchAdData(parsed.sourceId, cfg.meta_access_token, cfg.meta_ad_account_id);
+      if (adData) {
+        await db
+          .update(leads)
+          .set({
+            anuncio: adData.adName,
+            conjunto_anuncio: adData.adsetName,
+            campanha: adData.campaignName,
+          })
+          .where(eq(leads.id, existing.id));
+        existing = { ...existing, anuncio: adData.adName, conjunto_anuncio: adData.adsetName, campanha: adData.campaignName };
+      }
+    }
+
+    // 5. Send LeadSubmitted CAPI event for new leads
+    if (isNew) {
+      await sendLeadSubmitted(existing, tenantId).catch((err) =>
+        console.error('[lead] sendLeadSubmitted error:', err)
+      );
+    }
+
+    // Mark webhook as processed
+    await db
+      .update(webhook_logs)
+      .set({ processed: true })
+      .where(
+        and(
+          eq(webhook_logs.tenant_id, tenantId),
+          eq(webhook_logs.source, parsed.source),
+          eq(webhook_logs.processed, false)
+        )
+      );
+  } catch (err) {
+    console.error('[lead] processIncomingMessage error:', err);
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    await logWebhook(tenantId, parsed.source, parsed.rawPayload, false, errorMsg);
+  }
+}
+
+export async function updateLeadStatus(id: number, status: LeadStatus): Promise<Lead | null> {
+  const updates: Partial<Lead & { updated_at: Date }> = {
+    status,
+    updated_at: new Date(),
+  };
+
+  if (status === 'qualificado') updates.data_qualificacao = new Date();
+  if (status === 'ganho') updates.data_ganho = new Date();
+
+  const [updated] = await db.update(leads).set(updates).where(eq(leads.id, id)).returning();
+
+  if (!updated) return null;
+
+  // Fire QualifiedLead CAPI for qualificado or ganho
+  if ((status === 'qualificado' || status === 'ganho') && !updated.qualified_lead_sent && updated.tenant_id) {
+    sendQualifiedLead(updated, updated.tenant_id).catch((err) =>
+      console.error('[lead] sendQualifiedLead error:', err)
+    );
+  }
+
+  return updated;
+}
+
+export async function findLeadByPhone(phone: string, tenantId: number): Promise<Lead | null> {
+  const normalized = normalizePhone(phone);
+  return (
+    (await db.query.leads.findFirst({
+      where: and(eq(leads.telefone, normalized), eq(leads.tenant_id, tenantId)),
+    })) ?? null
+  );
+}

@@ -1,0 +1,42 @@
+# Dependencies (reinstalled in Docker)
+node_modules
+frontend/node_modules
+backend/node_modules
+
+# Build outputs (rebuilt in Docker)
+frontend/dist
+backend/dist
+
+# Development environment
+.env
+.env.*
+backend/.env
+
+# Git
+.git
+.gitignore
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Test files
+*.test.ts
+*.spec.ts
+
+# Docs
+*.md
+!DEPLOY.md
