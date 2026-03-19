@@ -45,15 +45,11 @@ services:
           memory: 128M
       labels:
         - traefik.enable=true
-        # ── HTTP routing (IP-based, no domain) ──────────────────────────────
-        - traefik.http.routers.rastreamentowpp.rule=PathPrefix(`/`)
-        - traefik.http.routers.rastreamentowpp.entrypoints=web
+        # ── HTTPS com domínio + SSL automático (Let's Encrypt) ───────────────
+        - traefik.http.routers.rastreamentowpp.rule=Host(`bulhoes.metrix.com`)
+        - traefik.http.routers.rastreamentowpp.entrypoints=websecure
+        - traefik.http.routers.rastreamentowpp.tls.certresolver=letsencrypt
         - traefik.http.services.rastreamentowpp.loadbalancer.server.port=3001
-        # ── HTTPS routing (uncomment when you have a domain) ────────────────
-        # - traefik.http.routers.rastreamentowpp-secure.rule=Host(`seu-dominio.com.br`)
-        # - traefik.http.routers.rastreamentowpp-secure.entrypoints=websecure
-        # - traefik.http.routers.rastreamentowpp-secure.tls.certresolver=letsencrypt
-        # - traefik.http.services.rastreamentowpp-secure.loadbalancer.server.port=3001
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3001/health || exit 1"]
       interval: 30s
