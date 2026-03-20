@@ -231,4 +231,25 @@ router.post('/backfill-ad-data', async (req, res, next) => {
   }
 });
 
+// POST /api/leads/reset-capi-retry — unblock leads stuck at capi_retry_count >= 3
+// Resets retry count so the scheduler will try to send CAPI events again
+router.post('/reset-capi-retry', async (req, res, next) => {
+  try {
+    const { tenantId } = (req as unknown as AuthRequest).user;
+    const result = await db
+      .update(leads)
+      .set({ capi_retry_count: 0 })
+      .where(
+        and(
+          eq(leads.tenant_id, tenantId),
+          isNotNull(leads.ctwaclid),
+          eq(leads.lead_submitted_sent, false)
+        )
+      );
+    res.json({ ok: true, message: 'capi_retry_count resetado para leads não enviados com ctwaclid.' });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export { router as leadsRouter };

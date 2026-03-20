@@ -66,12 +66,20 @@ function buildUserData(lead: Lead, pageId?: string | null): CapiUserData {
   return userData;
 }
 
-export async function sendLeadSubmitted(lead: Lead, tenantId: number): Promise<boolean> {
-  if (lead.lead_submitted_sent) return true;
-  if (!lead.ctwaclid) return false;
+// 'sent' = API called and succeeded
+// 'failed' = API called but returned error (increment retry count)
+// 'skipped' = not attempted (missing ctwaclid or settings not configured yet)
+export type CapiResult = 'sent' | 'failed' | 'skipped';
+
+export async function sendLeadSubmitted(lead: Lead, tenantId: number): Promise<CapiResult> {
+  if (lead.lead_submitted_sent) return 'sent';
+  if (!lead.ctwaclid) return 'skipped';
 
   const cfg = await getSettings(tenantId);
-  if (!cfg?.meta_pixel_id || !cfg?.meta_access_token) return false;
+  if (!cfg?.meta_pixel_id || !cfg?.meta_access_token) {
+    console.log(`[meta-capi] LeadSubmitted skipped for lead ${lead.id}: settings not configured`);
+    return 'skipped';
+  }
 
   const event: CapiEvent = {
     action_source: 'business_messaging',
@@ -87,16 +95,20 @@ export async function sendLeadSubmitted(lead: Lead, tenantId: number): Promise<b
       .update(leads)
       .set({ lead_submitted_sent: true })
       .where(eq(leads.id, lead.id));
+    console.log(`[meta-capi] LeadSubmitted sent for lead ${lead.id}`);
+    return 'sent';
   }
-  return ok;
+  return 'failed';
 }
 
-export async function sendQualifiedLead(lead: Lead, tenantId: number): Promise<boolean> {
-  if (lead.qualified_lead_sent) return true;
-  if (!lead.ctwaclid) return false;
+export async function sendQualifiedLead(lead: Lead, tenantId: number): Promise<CapiResult> {
+  if (lead.qualified_lead_sent) return 'sent';
+  if (!lead.ctwaclid) return 'skipped';
 
   const cfg = await getSettings(tenantId);
-  if (!cfg?.meta_pixel_id || !cfg?.meta_access_token) return false;
+  if (!cfg?.meta_pixel_id || !cfg?.meta_access_token) {
+    return 'skipped';
+  }
 
   const event: CapiEvent = {
     action_source: 'business_messaging',
@@ -112,6 +124,8 @@ export async function sendQualifiedLead(lead: Lead, tenantId: number): Promise<b
       .update(leads)
       .set({ qualified_lead_sent: true })
       .where(eq(leads.id, lead.id));
+    console.log(`[meta-capi] QualifiedLead sent for lead ${lead.id}`);
+    return 'sent';
   }
-  return ok;
+  return 'failed';
 }
