@@ -41,6 +41,13 @@ async function storeMessage(leadId: number, parsed: ParsedMessage): Promise<void
 }
 
 export async function processIncomingMessage(parsed: ParsedMessage, tenantId: number): Promise<void> {
+  // Ignore messages older than 24 hours (Meta webhook replays)
+  const msgTime = new Date(parsed.timestamp).getTime();
+  if (Date.now() - msgTime > 24 * 60 * 60 * 1000) {
+    console.log(`[lead] Skipping old message from ${parsed.phone} (${parsed.timestamp})`);
+    return;
+  }
+
   // 1. Log webhook
   await logWebhook(tenantId, parsed.source, parsed.rawPayload, false, null);
 
