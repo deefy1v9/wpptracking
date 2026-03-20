@@ -7,6 +7,7 @@ import { requireAuth } from '../middleware/auth';
 import type { AuthRequest } from '../middleware/auth';
 import { updateLeadStatus } from '../services/lead';
 import { fetchAdData } from '../services/meta-graph';
+import { getSettings } from '../services/settings-cache';
 import { z } from 'zod';
 
 const router = Router();
@@ -197,12 +198,17 @@ router.post('/backfill-ad-data', async (req, res, next) => {
   try {
     const { tenantId } = (req as unknown as AuthRequest).user;
 
-    // Get first connection with meta credentials
+    // Use global settings token (confirmed working) falling back to connection token
+    const cfg = await getSettings(tenantId);
     const conn = await db.query.connections.findFirst({
       where: and(eq(connections.tenant_id, tenantId), isNotNull(connections.meta_access_token)),
     });
-    if (!conn?.meta_access_token) {
-      res.status(400).json({ error: 'Nenhuma conexão com Access Token configurado.' });
+
+    const accessToken = cfg?.meta_access_token ?? conn?.meta_access_token ?? null;
+    const adAccountId = cfg?.meta_ad_account_id ?? conn?.meta_ad_account_id ?? null;
+
+    if (!accessToken) {
+      res.status(400).json({ error: 'Nenhum Access Token configurado em Configurações → Meta Ads / CAPI.' });
       return;
     }
 
@@ -214,7 +220,7 @@ router.post('/backfill-ad-data', async (req, res, next) => {
     let updated = 0;
     for (const lead of pending) {
       if (!lead.source_id) continue;
-      const adData = await fetchAdData(lead.source_id, conn.meta_access_token, conn.meta_ad_account_id);
+      const adData = await fetchAdData(lead.source_id, accessToken, adAccountId);
       if (adData) {
         await db.update(leads).set({
           anuncio: adData.adName,
