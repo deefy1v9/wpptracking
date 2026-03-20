@@ -1,12 +1,13 @@
 import { db } from '../db/index';
 import { leads, messages, webhook_logs } from '../db/schema';
 import type { Lead, LeadStatus, NewLead } from '../db/schema';
-import { eq, and, gte, lt } from 'drizzle-orm';
+import { eq, and, gte, lt, desc } from 'drizzle-orm';
 import type { ParsedMessage } from '../types/parsed-message';
 import { normalizePhone } from './hash';
 import { fetchAdData } from './meta-graph';
 import { sendLeadSubmitted, sendQualifiedLead } from './meta-capi';
 import { getSettings } from './settings-cache';
+import { getTriggerPhrases } from './trigger-cache';
 
 async function logWebhook(
   tenantId: number,
@@ -49,6 +50,29 @@ export async function processIncomingMessage(
   const msgTime = new Date(parsed.timestamp).getTime();
   if (Date.now() - msgTime > 24 * 60 * 60 * 1000) {
     console.log(`[lead] Skipping old message from ${parsed.phone} (${parsed.timestamp})`);
+    return;
+  }
+
+  // Early path for outgoing messages: only detect trigger phrases, no lead creation
+  if (parsed.direction === 'saida') {
+    try {
+      const phone = normalizePhone(parsed.phone);
+      const lead = await db.query.leads.findFirst({
+        where: and(eq(leads.telefone, phone), eq(leads.tenant_id, tenantId)),
+        orderBy: [desc(leads.data_entrada)],
+      });
+      if (lead) {
+        await storeMessage(lead.id, parsed);
+        const phrases = await getTriggerPhrases(tenantId);
+        const content = (parsed.content ?? '').toLowerCase();
+        const matched = phrases.find((p) => content.includes(p.phrase.toLowerCase()));
+        if (matched && matched.status !== lead.status) {
+          await updateLeadStatus(lead.id, matched.status);
+        }
+      }
+    } catch (err) {
+      console.error('[lead] processOutgoingMessage error:', err);
+    }
     return;
   }
 

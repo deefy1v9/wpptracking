@@ -116,6 +116,14 @@ export interface WebhookUrls {
   cloudia: string;
 }
 
+export interface TriggerPhrase {
+  id: number;
+  tenant_id: number;
+  status: LeadStatus;
+  phrase: string;
+  created_at: string | null;
+}
+
 export interface LeadFilters {
   status?: string;
   origem?: string;

@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, ExternalLink, ChevronLeft, ChevronRight, LayoutList, Kanban } from 'lucide-react';
+import { Search, ExternalLink, ChevronLeft, ChevronRight, LayoutList, Kanban, Plus, X } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLeads } from '../hooks/useLeads';
 import { StatusBadge, OrigemBadge } from '../components/ui/Badge';
 import { StatusDropdown } from '../components/ui/StatusDropdown';
 import { LeadCard } from '../components/Leads/LeadCard';
 import { ChatModal } from '../components/Leads/ChatModal';
 import { formatDateTime, formatPhone, truncate } from '../utils/format';
+import { triggerPhrasesService } from '../services/api';
+import toast from 'react-hot-toast';
 import type { LeadFilters, LeadStatus, LeadOrigem } from '../types';
 
 const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
@@ -52,6 +55,43 @@ export default function Leads() {
   const [filters, setFilters] = useState<LeadFilters>({ page: 1, limit: 50 });
   const [search, setSearch] = useState('');
   const [chatLeadId, setChatLeadId] = useState<number | null>(null);
+
+  // Trigger phrases
+  const qc = useQueryClient();
+  const [addingForStatus, setAddingForStatus] = useState<LeadStatus | null>(null);
+  const [addInputValue, setAddInputValue] = useState('');
+
+  const { data: triggerPhrases = [] } = useQuery({
+    queryKey: ['trigger-phrases'],
+    queryFn: () => triggerPhrasesService.list().then((r) => r.data),
+  });
+
+  const createPhrase = useMutation({
+    mutationFn: (data: { status: LeadStatus; phrase: string }) =>
+      triggerPhrasesService.create(data).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['trigger-phrases'] });
+      setAddingForStatus(null);
+      setAddInputValue('');
+    },
+    onError: () => toast.error('Erro ao salvar gatilho'),
+  });
+
+  const deletePhrase = useMutation({
+    mutationFn: (id: number) => triggerPhrasesService.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['trigger-phrases'] }),
+    onError: () => toast.error('Erro ao remover gatilho'),
+  });
+
+  function handleAddPhrase(status: LeadStatus) {
+    const phrase = addInputValue.trim();
+    if (!phrase) { setAddingForStatus(null); return; }
+    createPhrase.mutate({ status, phrase });
+  }
+
+  function copyPhrase(phrase: string) {
+    navigator.clipboard.writeText(phrase).then(() => toast.success('Frase copiada!'));
+  }
 
   // For pipeline mode fetch all (up to 500)
   const pipelineFilters: LeadFilters = { ...filters, page: 1, limit: 500 };
@@ -281,8 +321,61 @@ export default function Leads() {
           <div className="flex gap-4 min-w-max">
             {PIPELINE_COLUMNS.map((col) => {
               const colLeads = (pipelineData?.leads ?? []).filter((l) => l.status === col.status);
+              const colPhrases = triggerPhrases.filter((p) => p.status === col.status);
+              const chipColor = col.headerClass.split(' ')[0]; // e.g. "text-blue-400"
+              const chipBorder = col.headerClass.split(' ')[1]; // e.g. "border-blue-500/40"
               return (
                 <div key={col.status} className="w-72 flex flex-col">
+                  {/* Trigger phrases */}
+                  <div className="mb-2 min-h-[28px] flex flex-wrap gap-1.5 items-center">
+                    {colPhrases.map((p) => (
+                      <span
+                        key={p.id}
+                        className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border bg-gray-900 ${chipColor} ${chipBorder}`}
+                      >
+                        <button
+                          onClick={() => copyPhrase(p.phrase)}
+                          className="hover:opacity-80 max-w-[160px] truncate"
+                          title={`Copiar: ${p.phrase}`}
+                        >
+                          {p.phrase}
+                        </button>
+                        <button
+                          onClick={() => deletePhrase.mutate(p.id)}
+                          className="opacity-40 hover:opacity-100 ml-0.5 flex-shrink-0"
+                          title="Remover"
+                        >
+                          <X className="w-2.5 h-2.5" />
+                        </button>
+                      </span>
+                    ))}
+                    {addingForStatus === col.status ? (
+                      <form
+                        onSubmit={(e) => { e.preventDefault(); handleAddPhrase(col.status); }}
+                        className="flex items-center gap-1"
+                      >
+                        <input
+                          autoFocus
+                          value={addInputValue}
+                          onChange={(e) => setAddInputValue(e.target.value)}
+                          onBlur={() => { if (!addInputValue.trim()) setAddingForStatus(null); }}
+                          onKeyDown={(e) => { if (e.key === 'Escape') { setAddingForStatus(null); setAddInputValue(''); } }}
+                          placeholder="Ex: Pedido confirmado"
+                          className="text-xs bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-white w-36 focus:outline-none focus:border-gray-500"
+                        />
+                        <button type="submit" className={`text-xs ${chipColor} hover:opacity-80`}>✓</button>
+                      </form>
+                    ) : (
+                      <button
+                        onClick={() => { setAddingForStatus(col.status); setAddInputValue(''); }}
+                        className="text-xs text-gray-600 hover:text-gray-400 flex items-center gap-0.5"
+                        title="Adicionar frase-gatilho"
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+
                   {/* Column header */}
                   <div className={`flex items-center justify-between mb-3 pb-2 border-b ${col.headerClass}`}>
                     <span className={`text-sm font-semibold ${col.headerClass.split(' ')[0]}`}>

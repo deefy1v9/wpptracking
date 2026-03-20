@@ -8,6 +8,8 @@ import type {
   WebhookUrls,
   LeadFilters,
   Connection,
+  TriggerPhrase,
+  LeadStatus,
 } from '../types';
 
 const api = axios.create({ baseURL: '/api' });
@@ -74,6 +76,14 @@ export const connectionsService = {
   create: (data: Partial<Connection>) => api.post<Connection>('/connections', data),
   update: (id: number, data: Partial<Connection>) => api.patch<Connection>(`/connections/${id}`, data),
   remove: (id: number) => api.delete(`/connections/${id}`),
+};
+
+// Trigger Phrases
+export const triggerPhrasesService = {
+  list: () => api.get<TriggerPhrase[]>('/trigger-phrases'),
+  create: (data: { status: LeadStatus; phrase: string }) =>
+    api.post<TriggerPhrase>('/trigger-phrases', data),
+  delete: (id: number) => api.delete(`/trigger-phrases/${id}`),
 };
 
 // Logs

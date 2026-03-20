@@ -10,6 +10,7 @@ import { statsRouter } from './routes/stats';
 import { logsRouter } from './routes/logs';
 import { webhookRouter } from './routes/webhook';
 import { connectionsRouter } from './routes/connections';
+import { triggerPhrasesRouter } from './routes/trigger-phrases';
 import { errorMiddleware } from './middleware/error';
 import { startCapiRetryScheduler } from './services/capi-scheduler';
 
@@ -36,6 +37,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/leads', leadsRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/connections', connectionsRouter);
+app.use('/api/trigger-phrases', triggerPhrasesRouter);
 app.use('/api/stats', statsRouter);
 app.use('/api/logs', logsRouter);
 app.use('/webhook', webhookRouter);

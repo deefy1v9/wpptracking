@@ -70,12 +70,36 @@ export function parseEvolution(payload: unknown): ParsedMessage | null {
     const key = data.data?.key;
     if (!key) return null;
 
-    // Only process incoming messages
-    if (key.fromMe) return null;
-
     const rawPhone = key.remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '');
     const phone = normalizePhone(rawPhone);
     if (!phone) return null;
+
+    const isOutgoing = key.fromMe === true;
+
+    // For outgoing messages, only pass content — no ad attribution
+    if (isOutgoing) {
+      const timestamp = data.data?.messageTimestamp
+        ? new Date(data.data.messageTimestamp * 1000).toISOString()
+        : new Date().toISOString();
+      return {
+        phone,
+        name: null,
+        content: extractContent(data.data?.message),
+        messageId: key.id,
+        timestamp,
+        direction: 'saida',
+        tipo: detectTipo(data.data?.message),
+        ctwaclid: null,
+        sourceId: null,
+        sourceUrl: null,
+        tituloAnuncio: null,
+        tipoMidia: null,
+        thumbnailUrl: null,
+        veioDeAnuncio: false,
+        source: 'evolution',
+        rawPayload: payload,
+      };
+    }
 
     const adReply = data.data?.contextInfo?.externalAdReply;
     const veioDeAnuncio = !!adReply?.ctwaClid;

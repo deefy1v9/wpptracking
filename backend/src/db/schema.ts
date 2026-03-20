@@ -164,6 +164,14 @@ export const webhook_logs = pgTable('webhook_logs', {
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 
+export const triggerPhrases = pgTable('trigger_phrases', {
+  id: serial('id').primaryKey(),
+  tenant_id: integer('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  status: leadStatusEnum('status').notNull(),
+  phrase: text('phrase').notNull(),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
 // Type exports
 export type Tenant = typeof tenants.$inferSelect;
 export type NewTenant = typeof tenants.$inferInsert;
@@ -186,3 +194,5 @@ export type MessageDirecao = 'entrada' | 'saida';
 export type MessageTipo = 'texto' | 'imagem' | 'audio' | 'video' | 'documento' | 'sticker' | 'outros';
 export type WebhookSource = 'whatsapp_cloud' | 'evolution' | 'cloudia';
 export type AttributionModel = 'primeiro_clique' | 'ultimo_clique';
+export type TriggerPhrase = typeof triggerPhrases.$inferSelect;
+export type NewTriggerPhrase = typeof triggerPhrases.$inferInsert;
