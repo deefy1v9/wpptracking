@@ -47,9 +47,11 @@ export async function processIncomingMessage(
   connectionOverride?: { meta_access_token?: string | null; meta_ad_account_id?: string | null }
 ): Promise<void> {
   // Ignore messages older than 24 hours (Meta webhook replays)
+  // or more than 5 minutes in the future (corrupt/test timestamps like 1773953677)
   const msgTime = new Date(parsed.timestamp).getTime();
-  if (Date.now() - msgTime > 24 * 60 * 60 * 1000) {
-    console.log(`[lead] Skipping old message from ${parsed.phone} (${parsed.timestamp})`);
+  const ageMs = Date.now() - msgTime;
+  if (ageMs > 24 * 60 * 60 * 1000 || ageMs < -5 * 60 * 1000) {
+    console.log(`[lead] Skipping message with out-of-range timestamp from ${parsed.phone} (${parsed.timestamp})`);
     return;
   }
 
