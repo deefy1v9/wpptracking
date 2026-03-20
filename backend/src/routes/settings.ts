@@ -19,11 +19,12 @@ router.get('/webhook-urls', requireAuth, (req: Request, res) => {
   const protocol = req.headers['x-forwarded-proto'] ?? req.protocol;
   const host = req.headers['x-forwarded-host'] ?? req.get('host');
   const base = `${protocol}://${host}`;
+  const { tenantId } = (req as unknown as AuthRequest).user;
 
   res.json({
     whatsapp: `${base}/webhook/whatsapp`,
     evolution: `${base}/webhook/evolution`,
-    cloudia: `${base}/webhook/cloudia`,
+    cloudia: `${base}/webhook/cloudia/${tenantId}`,
   });
 });
 
@@ -94,6 +95,30 @@ router.post('/', requireAuth, async (req, res, next) => {
     invalidateSettingsCache(tenantId);
 
     res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/settings/test-meta — test the stored Meta credentials server-side
+router.post('/test-meta', requireAuth, async (req, res, next) => {
+  try {
+    const { tenantId } = (req as unknown as AuthRequest).user;
+    const row = await db.query.settings.findFirst({ where: eq(settings.tenant_id, tenantId) });
+    if (!row?.meta_access_token || !row?.meta_pixel_id) {
+      res.status(400).json({ ok: false, error: 'Token ou Pixel ID não configurados.' });
+      return;
+    }
+    const metaRes = await fetch(
+      `https://graph.facebook.com/v22.0/${row.meta_pixel_id}?access_token=${row.meta_access_token}`
+    );
+    if (metaRes.ok) {
+      const data = await metaRes.json() as { id?: string; name?: string };
+      res.json({ ok: true, pixelId: data.id, name: data.name });
+    } else {
+      const err = await metaRes.text();
+      res.json({ ok: false, error: err });
+    }
   } catch (err) {
     next(err);
   }

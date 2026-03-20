@@ -393,30 +393,21 @@ export default function Settings() {
   }
 
   async function testMetaConnection() {
-    if (!metaToken) {
-      toast.error('Informe o Access Token completo para testar a conexão');
-      return;
-    }
-    if (!metaPixelId) {
-      toast.error('Preencha o Pixel ID primeiro');
-      return;
-    }
     setTestingMeta(true);
     setMetaStatus('idle');
     try {
-      const res = await axios.get(
-        `https://graph.facebook.com/v22.0/${metaPixelId}?access_token=${metaToken}`
-      );
-      if (res.data?.id) {
+      const res = await axios.post('/api/settings/test-meta');
+      if (res.data?.ok) {
         setMetaStatus('ok');
-        toast.success('Conexão com Meta OK!');
+        toast.success(`Conexão com Meta OK! Pixel: ${res.data.pixelId}`);
       } else {
         setMetaStatus('error');
-        toast.error('Resposta inesperada do Meta');
+        toast.error(`Erro Meta: ${res.data?.error ?? 'Resposta inesperada'}`);
       }
-    } catch {
+    } catch (err: unknown) {
       setMetaStatus('error');
-      toast.error('Erro ao conectar com o Meta. Verifique o token e pixel ID.');
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      toast.error(msg ?? 'Erro ao conectar com o Meta. Verifique o token e pixel ID.');
     } finally {
       setTestingMeta(false);
     }

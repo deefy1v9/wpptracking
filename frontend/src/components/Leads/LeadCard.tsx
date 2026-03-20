@@ -1,4 +1,4 @@
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, CheckCircle2, Clock } from 'lucide-react';
 import { StatusBadge, OrigemBadge } from '../ui/Badge';
 import { StatusDropdown } from '../ui/StatusDropdown';
 import { formatDateTime, formatPhone, truncate } from '../../utils/format';
@@ -54,10 +54,24 @@ export function LeadCard({ lead, onClick }: LeadCardProps) {
         </p>
       )}
 
-      {/* Entrada */}
-      <p className="text-xs text-gray-600">
-        {formatDateTime(lead.data_entrada)}
-      </p>
+      {/* Entrada + CAPI status */}
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-gray-600">{formatDateTime(lead.data_entrada)}</p>
+        {lead.origem === 'anuncio' && (
+          lead.lead_submitted_sent
+            ? (
+              <span className="flex items-center gap-1 text-xs text-green-500" title="LeadSubmitted enviado ao Meta">
+                <CheckCircle2 className="w-3 h-3" />
+                Meta
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-xs text-gray-500" title="Aguardando envio ao Meta">
+                <Clock className="w-3 h-3" />
+                Meta
+              </span>
+            )
+        )}
+      </div>
 
       {/* Última mensagem */}
       {lead.ultima_mensagem && (

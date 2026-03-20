@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import { db } from '../db/index';
-import { connections, webhook_logs } from '../db/schema';
+import { connections, webhook_logs, settings, leads } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { parseWhatsAppCloud } from '../parsers/whatsapp-cloud';
 import { parseEvolution } from '../parsers/evolution';
@@ -120,18 +120,54 @@ router.post('/evolution', async (req, res) => {
   }
 });
 
-// ─── Cloudia webhook ──────────────────────────────────────────────────────────
+// ─── Cloudia webhook (/webhook/cloudia/:tenantId) ─────────────────────────────
+// Cloudia sends events when a contact is updated, appointment scheduled, or won.
+// We match by phone, then update the existing lead status/name.
 
-router.post('/cloudia', async (req, res) => {
+router.post('/cloudia/:tenantId', async (req, res) => {
   try {
+    const tenantId = parseInt((req.params as Record<string, string>)['tenantId'], 10);
+    if (isNaN(tenantId)) {
+      res.status(400).json({ error: 'Invalid tenantId' });
+      return;
+    }
+
+    // Validate secret if configured
+    const tenantSettings = await db.query.settings.findFirst({ where: eq(settings.tenant_id, tenantId) });
+    const secret = tenantSettings?.cloudia_webhook_secret;
+    if (secret) {
+      const provided = req.headers['x-cloudia-secret'] ?? req.query['secret'];
+      if (provided !== secret) {
+        res.status(403).json({ error: 'Forbidden' });
+        return;
+      }
+    }
+
     const parsed = parseCloudia(req.body);
     if (!parsed) {
       res.status(200).json({ status: 'ok' });
       return;
     }
 
-    // Cloudia doesn't have connection-based routing yet — log and skip
-    console.warn('[webhook/cloudia] received but no tenant routing implemented');
+    const lead = await findLeadByPhone(parsed.phone, tenantId);
+    if (!lead) {
+      console.log(`[webhook/cloudia] no lead found for phone ${parsed.phone}, tenant ${tenantId}`);
+      res.status(200).json({ status: 'ok' });
+      return;
+    }
+
+    // Map Cloudia event → lead status
+    if (parsed.event === 'appointment_scheduled') {
+      await updateLeadStatus(lead.id, 'qualificado');
+      console.log(`[webhook/cloudia] lead ${lead.id} → qualificado (appointment_scheduled)`);
+    } else if (parsed.event === 'lead_won') {
+      await updateLeadStatus(lead.id, 'ganho');
+      console.log(`[webhook/cloudia] lead ${lead.id} → ganho (lead_won)`);
+    } else if (parsed.event === 'contact_updated' && parsed.name) {
+      await db.update(leads).set({ nome: parsed.name }).where(eq(leads.id, lead.id));
+      console.log(`[webhook/cloudia] lead ${lead.id} name updated`);
+    }
+
     res.status(200).json({ status: 'ok' });
   } catch (err) {
     console.error('[webhook/cloudia] error:', err);
