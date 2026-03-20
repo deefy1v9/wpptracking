@@ -129,15 +129,28 @@ router.post('/test-meta', requireAuth, async (req, res, next) => {
       res.status(400).json({ ok: false, error: 'Pixel ID não configurado.' });
       return;
     }
+    // Test by sending a dry-run event (test_event_code) to the CAPI endpoint.
+    // This validates both the token and pixel without requiring ads_read permission.
+    const testPayload = {
+      data: [{
+        event_name: 'TestEvent',
+        event_time: Math.floor(Date.now() / 1000),
+        action_source: 'business_messaging',
+        messaging_channel: 'whatsapp',
+        user_data: { ph: 'test' },
+      }],
+      test_event_code: 'TEST',
+    };
     const metaRes = await fetch(
-      `https://graph.facebook.com/v22.0/${row.meta_pixel_id}?access_token=${row.meta_access_token}`
+      `https://graph.facebook.com/v22.0/${row.meta_pixel_id}/events?access_token=${row.meta_access_token}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(testPayload) }
     );
-    if (metaRes.ok) {
-      const data = await metaRes.json() as { id?: string; name?: string };
-      res.json({ ok: true, pixelId: data.id, name: data.name });
+    const data = await metaRes.json() as { events_received?: number; error?: { message?: string; code?: number } };
+    if (metaRes.ok && !data.error) {
+      res.json({ ok: true, pixelId: row.meta_pixel_id, events_received: data.events_received });
     } else {
-      const err = await metaRes.text();
-      res.json({ ok: false, error: err });
+      const errMsg = data.error?.message ?? JSON.stringify(data);
+      res.json({ ok: false, error: errMsg });
     }
   } catch (err) {
     next(err);
