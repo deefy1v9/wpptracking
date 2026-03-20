@@ -63,6 +63,7 @@ export const settingsService = {
   get: () => api.get<Settings>('/settings'),
   save: (data: Partial<Settings>) => api.post('/settings', data),
   getWebhookUrls: () => api.get<WebhookUrls>('/settings/webhook-urls'),
+  testMeta: () => api.post<{ ok: boolean; pixelId?: string; name?: string; error?: string }>('/settings/test-meta'),
 };
 
 // Stats
