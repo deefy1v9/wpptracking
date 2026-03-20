@@ -59,11 +59,13 @@ const EMPTY_FORM: Omit<Connection, 'id' | 'created_at' | 'updated_at'> = {
 
 function ConnectionModal({
   initial,
+  isEditing,
   onClose,
   onSave,
   saving,
 }: {
   initial: typeof EMPTY_FORM;
+  isEditing?: boolean;
   onClose: () => void;
   onSave: (data: typeof EMPTY_FORM) => void;
   saving: boolean;
@@ -108,7 +110,7 @@ function ConnectionModal({
                   type={k === 'meta_access_token' ? 'password' : 'text'}
                   value={form[k] ?? ''}
                   onChange={(e) => set(k, e.target.value || null)}
-                  placeholder={k === 'meta_access_token' ? 'EAAxxxx...' : k === 'meta_ad_account_id' ? 'act_123456789' : '123456789'}
+                  placeholder={k === 'meta_access_token' ? (isEditing ? 'Deixe em branco para manter o atual' : 'EAAxxxx...') : k === 'meta_ad_account_id' ? 'act_123456789' : '123456789'}
                   className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500/30"
                 />
               </div>
@@ -134,7 +136,7 @@ function ConnectionModal({
                 type="password"
                 value={form.evolution_api_key ?? ''}
                 onChange={(e) => set('evolution_api_key', e.target.value || null)}
-                placeholder="sua-api-key"
+                placeholder={isEditing ? 'Deixe em branco para manter o atual' : 'sua-api-key'}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500/30"
               />
             </div>
@@ -313,18 +315,20 @@ function ConnectionsTab() {
 
       {modal.open && (
         <ConnectionModal
+          isEditing={!!modal.editing}
           initial={modal.editing ? {
             name: modal.editing.name,
             is_active: modal.editing.is_active,
             is_paused: modal.editing.is_paused,
-            meta_access_token: modal.editing.meta_access_token,
+            // Sensitive fields: clear masked values so user sees placeholder "already saved"
+            meta_access_token: null,
             meta_pixel_id: modal.editing.meta_pixel_id,
             meta_page_id: modal.editing.meta_page_id,
             meta_ad_account_id: modal.editing.meta_ad_account_id,
             evolution_api_url: modal.editing.evolution_api_url,
-            evolution_api_key: modal.editing.evolution_api_key,
+            evolution_api_key: null,
             verify_token: modal.editing.verify_token,
-            app_secret: modal.editing.app_secret,
+            app_secret: null,
             attribution_model: modal.editing.attribution_model,
           } : EMPTY_FORM}
           onClose={() => setModal({ open: false, editing: null })}
