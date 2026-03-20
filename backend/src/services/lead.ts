@@ -1,7 +1,7 @@
 import { db } from '../db/index';
 import { leads, messages, webhook_logs } from '../db/schema';
 import type { Lead, LeadStatus, NewLead } from '../db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, gte, lt } from 'drizzle-orm';
 import type { ParsedMessage } from '../types/parsed-message';
 import { normalizePhone } from './hash';
 import { fetchAdData } from './meta-graph';
@@ -59,9 +59,19 @@ export async function processIncomingMessage(
     const phone = normalizePhone(parsed.phone);
     const cfg = await getSettings(tenantId);
 
-    // 2. Find or create lead
+    // 2. Find or create lead — only match leads from the same calendar day
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const tomorrowStart = new Date(todayStart);
+    tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+
     let existing = await db.query.leads.findFirst({
-      where: and(eq(leads.telefone, phone), eq(leads.tenant_id, tenantId)),
+      where: and(
+        eq(leads.telefone, phone),
+        eq(leads.tenant_id, tenantId),
+        gte(leads.data_entrada, todayStart),
+        lt(leads.data_entrada, tomorrowStart),
+      ),
     });
 
     let isNew = false;
