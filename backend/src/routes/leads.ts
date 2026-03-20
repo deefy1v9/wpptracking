@@ -1,11 +1,12 @@
 import { Router } from 'express';
 import { db } from '../db/index';
-import { leads, messages } from '../db/schema';
+import { leads, messages, connections } from '../db/schema';
 import type { LeadStatus } from '../db/schema';
-import { eq, and, or, ilike, gte, lte, desc, count } from 'drizzle-orm';
+import { eq, and, or, ilike, gte, lte, desc, count, isNull, isNotNull } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth';
 import type { AuthRequest } from '../middleware/auth';
 import { updateLeadStatus } from '../services/lead';
+import { fetchAdData } from '../services/meta-graph';
 import { z } from 'zod';
 
 const router = Router();
@@ -186,6 +187,45 @@ router.get('/:id/messages', async (req, res, next) => {
       page,
       limit,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/leads/backfill-ad-data — fetch ad data for leads missing campaign info
+router.post('/backfill-ad-data', async (req, res, next) => {
+  try {
+    const { tenantId } = (req as unknown as AuthRequest).user;
+
+    // Get first connection with meta credentials
+    const conn = await db.query.connections.findFirst({
+      where: and(eq(connections.tenant_id, tenantId), isNotNull(connections.meta_access_token)),
+    });
+    if (!conn?.meta_access_token) {
+      res.status(400).json({ error: 'Nenhuma conexão com Access Token configurado.' });
+      return;
+    }
+
+    // Get leads with source_id but no campaign
+    const pending = await db.query.leads.findMany({
+      where: and(eq(leads.tenant_id, tenantId), isNotNull(leads.source_id), isNull(leads.campanha)),
+    });
+
+    let updated = 0;
+    for (const lead of pending) {
+      if (!lead.source_id) continue;
+      const adData = await fetchAdData(lead.source_id, conn.meta_access_token, conn.meta_ad_account_id);
+      if (adData) {
+        await db.update(leads).set({
+          anuncio: adData.adName,
+          conjunto_anuncio: adData.adsetName,
+          campanha: adData.campaignName,
+        }).where(eq(leads.id, lead.id));
+        updated++;
+      }
+    }
+
+    res.json({ total: pending.length, updated });
   } catch (err) {
     next(err);
   }
