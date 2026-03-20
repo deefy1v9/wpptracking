@@ -35,15 +35,13 @@ export async function fetchAdData(
       campaign?: { id: string; name: string };
     };
 
-    // Validar que o anúncio pertence à conta configurada
+    // Log se conta diferente da configurada (aviso apenas, não bloqueia)
     if (adAccountId && data.account_id) {
-      // Normalizar: remover 'act_' para comparar só os números
       const normalizeAccountId = (id: string) => id.replace(/^act_/, '');
       if (normalizeAccountId(data.account_id) !== normalizeAccountId(adAccountId)) {
         console.warn(
-          `[meta-graph] Anúncio ${sourceId} pertence à conta act_${data.account_id}, mas a conta configurada é ${adAccountId}. Ignorando.`
+          `[meta-graph] Anúncio ${sourceId} pertence à conta act_${data.account_id}, configurada é ${adAccountId} (usando mesmo assim)`
         );
-        return null;
       }
     }
 
