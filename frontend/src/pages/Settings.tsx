@@ -4,7 +4,7 @@ import { useSettings, useWebhookUrls, useSaveSettings } from '../hooks/useSettin
 import { useConnections, useCreateConnection, useUpdateConnection, useDeleteConnection } from '../hooks/useConnections';
 import { CopyButton } from '../components/ui/CopyButton';
 import toast from 'react-hot-toast';
-import axios from 'axios';
+import api from '../services/api';
 import type { Connection, AttributionModel } from '../types';
 
 type Tab = 'connections' | 'whatsapp' | 'evolution' | 'cloudia' | 'meta';
@@ -396,7 +396,7 @@ export default function Settings() {
     setTestingMeta(true);
     setMetaStatus('idle');
     try {
-      const res = await axios.post('/api/settings/test-meta');
+      const res = await api.post('/settings/test-meta');
       if (res.data?.ok) {
         setMetaStatus('ok');
         toast.success(`Conexão com Meta OK! Pixel: ${res.data.pixelId}`);
