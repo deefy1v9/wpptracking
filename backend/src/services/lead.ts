@@ -40,7 +40,11 @@ async function storeMessage(leadId: number, parsed: ParsedMessage): Promise<void
   });
 }
 
-export async function processIncomingMessage(parsed: ParsedMessage, tenantId: number): Promise<void> {
+export async function processIncomingMessage(
+  parsed: ParsedMessage,
+  tenantId: number,
+  connectionOverride?: { meta_access_token?: string | null; meta_ad_account_id?: string | null }
+): Promise<void> {
   // Ignore messages older than 24 hours (Meta webhook replays)
   const msgTime = new Date(parsed.timestamp).getTime();
   if (Date.now() - msgTime > 24 * 60 * 60 * 1000) {
@@ -115,8 +119,10 @@ export async function processIncomingMessage(parsed: ParsedMessage, tenantId: nu
     await storeMessage(existing.id, parsed);
 
     // 4. Fetch ad data from Graph API if new lead with ad data
-    if (isNew && parsed.sourceId && cfg?.meta_access_token) {
-      const adData = await fetchAdData(parsed.sourceId, cfg.meta_access_token, cfg.meta_ad_account_id);
+    const accessToken = connectionOverride?.meta_access_token ?? cfg?.meta_access_token;
+    const adAccountId = connectionOverride?.meta_ad_account_id ?? cfg?.meta_ad_account_id;
+    if (isNew && parsed.sourceId && accessToken) {
+      const adData = await fetchAdData(parsed.sourceId, accessToken, adAccountId);
       if (adData) {
         await db
           .update(leads)

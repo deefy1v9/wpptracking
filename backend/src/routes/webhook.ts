@@ -57,6 +57,7 @@ router.post('/whatsapp/:connectionId?', async (req, res) => {
 
     let tenantId: number | null = null;
     let appSecret: string | null = null;
+    let connCredentials: { meta_access_token?: string | null; meta_ad_account_id?: string | null } | undefined;
 
     if (connIdParam) {
       const connId = parseInt(connIdParam, 10);
@@ -64,6 +65,7 @@ router.post('/whatsapp/:connectionId?', async (req, res) => {
       if (conn) {
         tenantId = conn.tenant_id ?? null;
         appSecret = conn.app_secret ?? null;
+        connCredentials = { meta_access_token: conn.meta_access_token, meta_ad_account_id: conn.meta_ad_account_id };
       }
     } else {
       // Legacy fallback: env APP_SECRET
@@ -91,7 +93,7 @@ router.post('/whatsapp/:connectionId?', async (req, res) => {
     const parsed = parseWhatsAppCloud(payload);
 
     if (parsed && tenantId !== null) {
-      setImmediate(() => processIncomingMessage(parsed, tenantId!));
+      setImmediate(() => processIncomingMessage(parsed, tenantId!, connCredentials));
     }
 
     res.status(200).json({ status: 'ok' });
