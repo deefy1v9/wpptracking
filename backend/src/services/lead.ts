@@ -164,8 +164,12 @@ export async function processIncomingMessage(
     // 4. Fetch ad data from Graph API if new lead with ad data
     const accessToken = connectionOverride?.meta_access_token ?? cfg?.meta_access_token;
     const adAccountId = connectionOverride?.meta_ad_account_id ?? cfg?.meta_ad_account_id;
+    if (isNew) {
+      console.log(`[lead] ad-data check — phone:${parsed.phone} sourceId:${parsed.sourceId ?? 'null'} hasToken:${!!accessToken} adAccountId:${adAccountId ?? 'none'}`);
+    }
     if (isNew && parsed.sourceId && accessToken) {
       const adData = await fetchAdData(parsed.sourceId, accessToken, adAccountId);
+      console.log(`[lead] fetchAdData result for sourceId ${parsed.sourceId}:`, adData ? `campanha="${adData.campaignName}"` : 'null (not found or rejected)');
       if (adData) {
         await db
           .update(leads)

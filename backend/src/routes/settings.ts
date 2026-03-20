@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { db } from '../db/index';
-import { settings } from '../db/schema';
+import { settings, leads } from '../db/schema';
 import type { NewSettings } from '../db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and, isNotNull } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth';
 import type { AuthRequest } from '../middleware/auth';
 import { invalidateSettingsCache } from '../services/settings-cache';
@@ -94,6 +94,18 @@ router.post('/', requireAuth, async (req, res, next) => {
 
     invalidateSettingsCache(tenantId);
 
+    // When Meta credentials are (re)configured, reset capi_retry_count for leads
+    // that haven't been sent yet so the scheduler picks them up again.
+    const credentialsUpdated =
+      'meta_access_token' in updateData || 'meta_pixel_id' in updateData;
+    if (credentialsUpdated) {
+      await db
+        .update(leads)
+        .set({ capi_retry_count: 0 })
+        .where(and(eq(leads.tenant_id, tenantId), isNotNull(leads.ctwaclid)));
+      console.log(`[settings] Meta credentials updated — CAPI retry count reset for tenant ${tenantId}`);
+    }
+
     res.json({ ok: true });
   } catch (err) {
     next(err);
@@ -105,8 +117,16 @@ router.post('/test-meta', requireAuth, async (req, res, next) => {
   try {
     const { tenantId } = (req as unknown as AuthRequest).user;
     const row = await db.query.settings.findFirst({ where: eq(settings.tenant_id, tenantId) });
-    if (!row?.meta_access_token || !row?.meta_pixel_id) {
-      res.status(400).json({ ok: false, error: 'Token ou Pixel ID não configurados.' });
+    if (!row?.meta_access_token && !row?.meta_pixel_id) {
+      res.status(400).json({ ok: false, error: 'Access Token e Pixel ID não configurados. Salve as credenciais primeiro.' });
+      return;
+    }
+    if (!row?.meta_access_token) {
+      res.status(400).json({ ok: false, error: 'Access Token não configurado. Preencha o campo e salve.' });
+      return;
+    }
+    if (!row?.meta_pixel_id) {
+      res.status(400).json({ ok: false, error: 'Pixel ID não configurado.' });
       return;
     }
     const metaRes = await fetch(

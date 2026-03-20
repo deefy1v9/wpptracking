@@ -406,8 +406,10 @@ export default function Settings() {
       }
     } catch (err: unknown) {
       setMetaStatus('error');
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      toast.error(msg ?? 'Erro ao conectar com o Meta. Verifique o token e pixel ID.');
+      const msg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+        'Erro ao conectar com o Meta. Verifique o token e pixel ID.';
+      toast.error(msg);
     } finally {
       setTestingMeta(false);
     }
