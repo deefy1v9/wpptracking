@@ -46,12 +46,19 @@ export async function processIncomingMessage(
   tenantId: number,
   connectionOverride?: { meta_access_token?: string | null; meta_ad_account_id?: string | null }
 ): Promise<void> {
-  // Ignore messages older than 24 hours (Meta webhook replays)
-  // or more than 5 minutes in the future (corrupt/test timestamps like 1773953677)
+  // Reject messages not from today in Brazil timezone (UTC-3).
+  // Prevents Meta webhook replays from previous days creating stale leads.
+  const BRAZIL_OFFSET_MS = -3 * 60 * 60 * 1000;
   const msgTime = new Date(parsed.timestamp).getTime();
-  const ageMs = Date.now() - msgTime;
-  if (ageMs > 24 * 60 * 60 * 1000 || ageMs < -5 * 60 * 1000) {
-    console.log(`[lead] Skipping message with out-of-range timestamp from ${parsed.phone} (${parsed.timestamp})`);
+  if (isNaN(msgTime)) {
+    console.log(`[lead] Skipping message with invalid timestamp from ${parsed.phone}`);
+    return;
+  }
+  const toBrazilDay = (ts: number) => new Date(ts + BRAZIL_OFFSET_MS).toISOString().slice(0, 10);
+  const todayBrazil = toBrazilDay(Date.now());
+  const msgDayBrazil = toBrazilDay(msgTime);
+  if (msgDayBrazil !== todayBrazil) {
+    console.log(`[lead] Skipping message from ${msgDayBrazil} (today is ${todayBrazil}, phone: ${parsed.phone})`);
     return;
   }
 
