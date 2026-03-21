@@ -100,6 +100,7 @@ export const settings = pgTable('settings', {
   evolution_api_key: text('evolution_api_key'),
   verify_token: text('verify_token'),
   meta_ad_account_id: text('meta_ad_account_id'),
+  meta_waba_id: text('meta_waba_id'),
   attribution_model: attributionModelEnum('attribution_model').default('ultimo_clique'),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow(),

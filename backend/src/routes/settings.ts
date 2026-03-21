@@ -63,6 +63,7 @@ router.post('/', requireAuth, async (req, res, next) => {
       'meta_pixel_id',
       'meta_page_id',
       'meta_ad_account_id',
+      'meta_waba_id',
       'cloudia_webhook_secret',
       'evolution_api_url',
       'evolution_api_key',

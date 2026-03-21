@@ -350,6 +350,7 @@ export default function Settings() {
   const [metaToken, setMetaToken] = useState('');
   const [metaPixelId, setMetaPixelId] = useState('');
   const [metaPageId, setMetaPageId] = useState('');
+  const [metaWabaId, setMetaWabaId] = useState('');
   const [metaAdAccountId, setMetaAdAccountId] = useState('');
   const [attributionModel, setAttributionModel] = useState<'primeiro_clique' | 'ultimo_clique'>('ultimo_clique');
   const [testingMeta, setTestingMeta] = useState(false);
@@ -367,6 +368,7 @@ export default function Settings() {
       setMetaToken('');
       setMetaPixelId(settings.meta_pixel_id ?? '');
       setMetaPageId(settings.meta_page_id ?? '');
+      setMetaWabaId((settings as Record<string, unknown>).meta_waba_id as string ?? '');
       setMetaAdAccountId(settings.meta_ad_account_id ?? '');
       setAttributionModel(settings.attribution_model ?? 'ultimo_clique');
       setCloudiaSecret('');
@@ -378,6 +380,7 @@ export default function Settings() {
     const payload: Record<string, string | null | undefined> = {
       meta_pixel_id: metaPixelId,
       meta_page_id: metaPageId,
+      meta_waba_id: metaWabaId || null,
       meta_ad_account_id: metaAdAccountId || null,
       attribution_model: attributionModel,
     };
@@ -584,6 +587,22 @@ export default function Settings() {
               placeholder="123456789"
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500/30"
             />
+          </div>
+
+          <div>
+            <p className="text-sm text-gray-400 mb-1.5">
+              WABA ID <span className="text-gray-500">(WhatsApp Business Account ID)</span>
+            </p>
+            <input
+              type="text"
+              value={metaWabaId}
+              onChange={(e) => setMetaWabaId(e.target.value)}
+              placeholder="904147868781178"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500/30"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Obrigatório para enviar eventos CAPI. Encontre em Meta Business Suite → WhatsApp → ID da conta.
+            </p>
           </div>
 
           <div>
