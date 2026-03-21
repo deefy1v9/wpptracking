@@ -49,7 +49,7 @@ async function sendCapiEvent(
   }
 }
 
-function buildUserData(lead: Lead, pageId?: string | null): CapiUserData {
+function buildUserData(lead: Lead): CapiUserData {
   const userData: CapiUserData = {
     ph: hashPhone(lead.telefone),
   };
@@ -60,8 +60,9 @@ function buildUserData(lead: Lead, pageId?: string | null): CapiUserData {
     if (lastName) userData.ln = hashName(lastName);
   }
 
+  // page_id omitido: causa erro 2804072 quando não corresponde ao page_id que gerou o ctwa_clid
+  // (acontece com múltiplos números WhatsApp conectados a páginas diferentes)
   if (lead.ctwaclid) userData.ctwa_clid = lead.ctwaclid;
-  if (pageId) userData.page_id = pageId;
 
   return userData;
 }
@@ -86,7 +87,7 @@ export async function sendLeadSubmitted(lead: Lead, tenantId: number): Promise<C
     event_name: 'LeadSubmitted',
     event_time: Math.floor(Date.now() / 1000),
     messaging_channel: 'whatsapp',
-    user_data: buildUserData(lead, cfg.meta_page_id),
+    user_data: buildUserData(lead),
   };
 
   const ok = await sendCapiEvent(cfg.meta_pixel_id, cfg.meta_access_token, event);
@@ -115,7 +116,7 @@ export async function sendQualifiedLead(lead: Lead, tenantId: number): Promise<C
     event_name: 'QualifiedLead',
     event_time: Math.floor(Date.now() / 1000),
     messaging_channel: 'whatsapp',
-    user_data: buildUserData(lead, cfg.meta_page_id),
+    user_data: buildUserData(lead),
   };
 
   const ok = await sendCapiEvent(cfg.meta_pixel_id, cfg.meta_access_token, event);
